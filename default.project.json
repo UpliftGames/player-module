@@ -1,0 +1,6 @@
+{
+	"name": "playermodule",
+	"tree": {
+		"$path": "src"
+	}
+}
