@@ -35,7 +35,9 @@ jobs:
         run: 7z x tool/release.zip -otool
 
       - name: Run CLI tool
-        run: python tool playermodule playermodule upliftgames --package
+        run: |
+          python tool playermodule playermodule upliftgames --package
+          rmdir tool
 
       - name: Build release.rbxm
         run: rojo build --output release.rbxm
