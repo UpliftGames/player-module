@@ -35,6 +35,7 @@ jobs:
         run: 7z x tool/release.zip -otool
 
       - name: Run CLI tool
+        shell: cmd
         run: |
           python tool playermodule playermodule upliftgames --package
           rmdir "tool" /s /q
