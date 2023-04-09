@@ -37,7 +37,7 @@ jobs:
       - name: Run CLI tool
         run: |
           python tool playermodule playermodule upliftgames --package
-          rmdir /s /q "tool"
+          rmdir "tool" /s /q
 
       - name: Build release.rbxm
         run: rojo build --output release.rbxm
