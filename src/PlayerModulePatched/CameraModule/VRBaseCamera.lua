@@ -25,6 +25,27 @@ local RunService = game:GetService("RunService")
 
 local UserGameSettings = UserSettings():GetService("UserGameSettings")
 
+local FFlagUserVRRotationUpdate do
+	local success, result = pcall(function()
+		return UserSettings():IsUserFeatureEnabled("UserVRRotationUpdate")
+	end)
+	FFlagUserVRRotationUpdate = success and result
+end
+
+local FFlagUserVRFollowCamera do
+	local success, result = pcall(function()
+		return UserSettings():IsUserFeatureEnabled("UserVRFollowCamera2")
+	end)
+	FFlagUserVRFollowCamera = success and result
+end
+
+local FFlagUserVRRotationTweeks do
+	local success, result = pcall(function()
+		return UserSettings():IsUserFeatureEnabled("UserVRRotationTweeks")
+	end)
+	FFlagUserVRRotationTweeks = success and result
+end
+
 --[[ The Module ]]--
 local BaseCamera = require(script.Parent:WaitForChild("BaseCamera"))
 local VRBaseCamera = setmetatable({}, BaseCamera)
@@ -45,8 +66,20 @@ function VRBaseCamera.new()
 	-- initialize vr specific variables
 	self.gamepadResetConnection = nil
 	self.needsReset = true
-
+	if FFlagUserVRFollowCamera then
+		self.recentered = false
+	end
+	
+	-- timer for step rotation
+	if FFlagUserVRRotationUpdate then
+		self:Reset()
+	end
+	
 	return self
+end
+
+function VRBaseCamera:Reset()
+	self.stepRotateTimeout = 0
 end
 
 function VRBaseCamera:GetModuleName()
@@ -69,6 +102,9 @@ function VRBaseCamera:GamepadZoomPress()
 end
 
 function VRBaseCamera:GamepadReset()
+	if FFlagUserVRRotationUpdate then
+		self.stepRotateTimeout = 0
+	end
 	self.needsReset = true
 end
 
@@ -82,10 +118,39 @@ function VRBaseCamera:OnEnable(enable: boolean)
 		self.gamepadResetConnection = CameraInput.gamepadReset:Connect(function()
 			self:GamepadReset()
 		end)
+		
+		if FFlagUserVRFollowCamera then
+			-- reset on options change
+			self.thirdPersonOptionChanged = VRService:GetPropertyChangedSignal("ThirdPersonFollowCamEnabled"):Connect(function()
+				-- only need to reset third person options if in third person
+				if not self:IsInFirstPerson() then
+					self:Reset()
+				end 
+			end)
+			
+			self.vrRecentered = VRService.UserCFrameChanged:Connect(function(userCFrame, _)
+				if userCFrame == Enum.UserCFrame.Floor then
+					self.recentered = true
+				end
+			end)
+		end
+
 	else
 		-- make sure zoom is reset when switching to another camera
 		if self.inFirstPerson then
 			self:GamepadZoomPress()
+		end
+
+		if FFlagUserVRFollowCamera then
+			if self.thirdPersonOptionChanged then
+				self.thirdPersonOptionChanged:Disconnect()
+				self.thirdPersonOptionChanged = nil
+			end
+			
+			if self.vrRecentered then
+				self.vrRecentered:Disconnect()
+				self.vrRecentered = nil
+			end
 		end
 
 		if self.gamepadResetConnection then
@@ -336,6 +401,44 @@ function VRBaseCamera:GetSubjectPosition(): Vector3?
 	self.lastSubjectPosition = result
 
 	return result
+end
+
+-- gets the desired rotation accounting for smooth rotation. Manages fades and resets resulting 
+-- from rotation
+function VRBaseCamera:getRotation(dt)
+	local rotateInput = CameraInput.getRotation()
+	local yawDelta = 0
+	
+	if UserGameSettings.VRSmoothRotationEnabled then
+		yawDelta = rotateInput.X * 40 * dt
+	else
+		
+		if math.abs(rotateInput.X) > 0.03 then
+			if self.stepRotateTimeout > 0 then
+				self.stepRotateTimeout -= dt
+			end
+			
+			if self.stepRotateTimeout <= 0 then
+				yawDelta = 1
+				if rotateInput.X < 0 then
+					yawDelta = -1
+				end
+				
+				if FFlagUserVRRotationTweeks then
+					yawDelta *= math.rad(30)
+				else
+					yawDelta *= math.rad(60)
+				end
+				self:StartFadeFromBlack()
+				self.stepRotateTimeout = 0.25
+			end
+		elseif math.abs(rotateInput.X) < 0.02 then
+			self.stepRotateTimeout = 0 -- allow fast rotation when spamming input
+		end
+	end
+	
+	return yawDelta
+
 end
 
 -----------------------------
