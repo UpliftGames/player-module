@@ -86,7 +86,7 @@ end
 function OrbitalCamera:LoadOrCreateNumberValueParameter(name: string, valueType, updateFunction)
 	local valueObj = script:FindFirstChild(name)
 
-	if valueObj and valueObj:isA(valueType) then
+	if valueObj and valueObj:IsA(valueType) then
 		-- Value object exists and is the correct type, use its value
 		self.externalProperties[name] = valueObj.Value
 	elseif self.externalProperties[name] ~= nil then
