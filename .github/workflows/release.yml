@@ -68,7 +68,7 @@ jobs:
       - name: Wally login
         if: steps.verify-changed-files.outputs.files_changed == 'true'
         shell: pwsh
-        run: wally login --token ${{ secrets.WALLY_PUBLISH_TOKEN }}
+        run: wally login --token ${{ secrets.WALLY_PUBLIC_PUBLISH_TOKEN }}
           
       - name: Wally publish
         if: steps.verify-changed-files.outputs.files_changed == 'true'
