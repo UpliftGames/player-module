@@ -1,0 +1,65 @@
+name: Forced Release
+
+on: 
+  workflow_dispatch:
+
+env:
+  OWNER: UpliftGames
+  REPO: pull-player-scripts
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: release
+
+      - uses: ok-nick/setup-aftman@v0.3.0
+
+      - uses: robinraju/release-downloader@v1.7
+        id: download_release
+        with: 
+          repository: ${{ env.OWNER }}/${{ env.REPO }}
+          out-file-path: "tool"
+          fileName: "release.zip"
+          latest: true
+      
+      - name: Unzip release
+        run: 7z x tool/release.zip -otool
+
+      - name: Run CLI tool
+        shell: cmd
+        run: |
+          python tool playermodule playermodule upliftgames --package
+          rmdir "tool" /s /q
+
+      - name: Build release.rbxm
+        run: rojo build --output release.rbxm
+      
+      - name: Git Auto Commit
+        uses: stefanzweifel/git-auto-commit-action@v4.16.0
+        with:
+          commit_message: (${{ env.VERSION }})
+          tagging_message: ${{ env.VERSION }}
+          create_branch: true
+          branch: release
+      
+      - name: Create release
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          files: release.rbxm
+          tag_name: ${{ env.VERSION }}
+      
+      - name: Wally login
+        shell: pwsh
+        run: wally login --token ${{ secrets.WALLY_PUBLIC_PUBLISH_TOKEN }}
+          
+      - name: Wally publish
+        run: wally publish
+        timeout-minutes: 5
+        
