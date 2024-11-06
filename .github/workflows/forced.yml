@@ -1,9 +1,7 @@
-name: Release
+name: Forced Release
 
 on: 
   workflow_dispatch:
-  schedule:
-    - cron:  '0 */12 * * *'
 
 env:
   OWNER: UpliftGames
@@ -43,14 +41,7 @@ jobs:
       - name: Build release.rbxm
         run: rojo build --output release.rbxm
       
-      - name: Verify Changed files
-        uses: tj-actions/verify-changed-files@v20.0.1
-        id: verify-changed-files
-        with:
-          files: src/PlayerModuleUnpatched
-      
       - name: Git Auto Commit
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
         uses: stefanzweifel/git-auto-commit-action@v4.16.0
         with:
           commit_message: (${{ env.VERSION }})
@@ -59,19 +50,16 @@ jobs:
           branch: release
       
       - name: Create release
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
         uses: softprops/action-gh-release@v0.1.15
         with:
           files: release.rbxm
           tag_name: ${{ env.VERSION }}
       
       - name: Wally login
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
         shell: pwsh
         run: wally login --token ${{ secrets.WALLY_PUBLIC_PUBLISH_TOKEN }}
           
       - name: Wally publish
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
         run: wally publish
         timeout-minutes: 5
         
