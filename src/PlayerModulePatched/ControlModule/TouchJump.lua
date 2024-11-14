@@ -12,7 +12,7 @@ local GuiService = game:GetService("GuiService")
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
-local FFlagUserUpdateTouchJump = FlagUtil.getUserFlag("UserUpdateTouchJump")
+local FFlagUserUpdateTouchJump = FlagUtil.getUserFlag("UserUpdateTouchJump2")
 local ConnectionUtil
 local CharacterUtil
 if FFlagUserUpdateTouchJump then
@@ -41,8 +41,10 @@ type TouchJumpClass = {
 }
 
 export type TouchJump = typeof(setmetatable({} :: {
-	_connectionUtil: any -- ConnectionUtil.ConnectionUtil,
-
+	-- holds any connections this module makes
+	_connectionUtil: any, -- ConnectionUtil.ConnectionUtil,
+	-- true if the jump is active including checks like humanoid state and if the module is active
+	_active: boolean
 }, {} :: TouchJumpClass))
 
 
@@ -70,6 +72,7 @@ function TouchJump.new()
 	self.externallyEnabled = false
 	self.isJumping = false
 	if FFlagUserUpdateTouchJump then
+		self._active = false
 		self._connectionUtil = ConnectionUtil.new()
 	end
 
@@ -88,6 +91,10 @@ end
 
 function TouchJump:EnableButton(enable)
 	if FFlagUserUpdateTouchJump then
+		if enable == self._active then
+			return
+		end
+
 		if enable then
 			if not self.jumpButton then
 				self:Create()
@@ -122,6 +129,7 @@ function TouchJump:EnableButton(enable)
 			self._connectionUtil:disconnect(CONNECTIONS.MENU_OPENED)
 		end
 		self:_reset()
+		self._active = enable
 	else
 		if enable then
 			if not self.jumpButton then
