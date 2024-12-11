@@ -3,7 +3,11 @@
 	Poppercam - Occlusion module that brings the camera closer to the subject when objects are blocking the view.
 --]]
 
+local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
+local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
+
 local ZoomController =  require(script.Parent:WaitForChild("ZoomController"))
+local FFlagUserFixCameraFPError = FlagUtil.getUserFlag("UserFixCameraFPError")
 
 local TransformExtrapolator = {} do
 	TransformExtrapolator.__index = TransformExtrapolator
@@ -87,12 +91,23 @@ function Poppercam:Enable(enable)
 end
 
 function Poppercam:Update(renderDt, desiredCameraCFrame, desiredCameraFocus, cameraController)
-	local rotatedFocus = CFrame.new(desiredCameraFocus.p, desiredCameraCFrame.p)*CFrame.new(
-		0, 0, 0,
-		-1, 0, 0,
-		0, 1, 0,
-		0, 0, -1
-	)
+	local rotatedFocus = nil
+	if FFlagUserFixCameraFPError then
+		rotatedFocus = CFrame.lookAlong(desiredCameraFocus.p, -desiredCameraCFrame.LookVector)*CFrame.new(
+			0, 0, 0,
+			-1, 0, 0,
+			0, 1, 0,
+			0, 0, -1
+		)
+	else
+		rotatedFocus = CFrame.new(desiredCameraFocus.p, desiredCameraCFrame.p)*CFrame.new(
+			0, 0, 0,
+			-1, 0, 0,
+			0, 1, 0,
+			0, 0, -1
+		)
+	end
+
 	local extrapolation = self.focusExtrapolator:Step(renderDt, rotatedFocus)
 	local zoom = ZoomController.Update(renderDt, rotatedFocus, extrapolation)
 	return rotatedFocus*CFrame.new(0, 0, zoom), desiredCameraFocus

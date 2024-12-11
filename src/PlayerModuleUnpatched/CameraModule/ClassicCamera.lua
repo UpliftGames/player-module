@@ -25,7 +25,7 @@ local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
 local FFlagUserFixCameraOffsetJitter = FlagUtil.getUserFlag("UserFixCameraOffsetJitter2")
 local FFlagUserCameraInputDt = FlagUtil.getUserFlag("UserCameraInputDt")
-
+local FFlagUserFixCameraFPError = FlagUtil.getUserFlag("UserFixCameraFPError")
 
 --[[ Services ]]--
 local PlayersService = game:GetService("Players")
@@ -202,12 +202,22 @@ function ClassicCamera:Update(dt)
 
 			local cameraFocusP = newCameraFocus.p
 			local newLookVector = self:CalculateNewLookVectorFromArg(overrideCameraLookVector, rotateInput)
-			newCameraCFrame = CFrame.new(cameraFocusP - (zoom * newLookVector), cameraFocusP)
+			
+			if FFlagUserFixCameraFPError then
+				newCameraCFrame = CFrame.lookAlong(cameraFocusP - (zoom * newLookVector), newLookVector)
+			else
+				newCameraCFrame = CFrame.new(cameraFocusP - (zoom * newLookVector), cameraFocusP)
+			end
 		else -- is FollowCamera
 			local newLookVector = self:CalculateNewLookVectorFromArg(overrideCameraLookVector, rotateInput)
 
 			newCameraFocus = CFrame.new(subjectPosition)
-			newCameraCFrame = CFrame.new(newCameraFocus.p - (zoom * newLookVector), newCameraFocus.p) + Vector3.new(0, cameraHeight, 0)
+
+			if FFlagUserFixCameraFPError then
+				newCameraCFrame = CFrame.lookAlong(newCameraFocus.p - (zoom * newLookVector), newLookVector)
+			else
+				newCameraCFrame = CFrame.new(newCameraFocus.p - (zoom * newLookVector), newCameraFocus.p) + Vector3.new(0, cameraHeight, 0)
+			end
 		end
 
 		local toggleOffset = self:GetCameraToggleOffset(timeDelta)
