@@ -12,7 +12,7 @@ local GuiService = game:GetService("GuiService")
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
-local FFlagUserUpdateTouchJump = FlagUtil.getUserFlag("UserUpdateTouchJump2")
+local FFlagUserUpdateTouchJump = FlagUtil.getUserFlag("UserUpdateTouchJump3")
 local ConnectionUtil
 local CharacterUtil
 if FFlagUserUpdateTouchJump then
@@ -89,9 +89,12 @@ function TouchJump:_reset()
 end
 end
 
+-- May be called multiple times with the same enabled state. This is because changes to state
+-- such as humanoid death should reset the jump state, but may leave the overall button enabled unchanged
 function TouchJump:EnableButton(enable)
 	if FFlagUserUpdateTouchJump then
 		if enable == self._active then
+			self:_reset()
 			return
 		end
 
@@ -184,7 +187,13 @@ if FFlagUserUpdateTouchJump then
 			)
 			self._connectionUtil:trackConnection(
 				CONNECTIONS.HUMANOID_STATE_ENABLED_CHANGED,
-				humanoid.StateEnabledChanged:Connect(update)
+				humanoid.StateEnabledChanged:Connect(function(state, isEnabled)
+					-- The isEnabled ~= self._active check is necessary because there's currently a bug
+					-- where the StateEnabledChanged event will fire even with no state changes
+					if state == Enum.HumanoidStateType.Jumping and isEnabled ~= self._active then
+						update()
+					end
+				end)
 			)
 		end)
 		self._connectionUtil:trackConnection(CONNECTIONS.HUMANOID, humanoidConnection)
