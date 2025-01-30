@@ -25,6 +25,7 @@ local VRService = game:GetService("VRService")
 
 -- Roblox User Input Control Modules - each returns a new() constructor function used to create controllers as needed
 local CommonUtils = script.Parent:WaitForChild("CommonUtils")
+local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
 local Keyboard = require(script:WaitForChild("Keyboard"))
 local Gamepad = require(script:WaitForChild("Gamepad"))
@@ -36,6 +37,7 @@ local FFlagUserDynamicThumbstickSafeAreaUpdate do
 	end)
 	FFlagUserDynamicThumbstickSafeAreaUpdate = success and result
 end
+local FFlagUserControlModuleEnableIdempotent = FlagUtil.getUserFlag("UserControlModuleEnableIdempotent")
 
 local TouchThumbstick = require(script:WaitForChild("TouchThumbstick"))
 
@@ -326,6 +328,9 @@ function ControlModule:Enable(enable: boolean?)
 	if enable == nil then
 		enable = true
 	end
+	if FFlagUserControlModuleEnableIdempotent then
+		if self.controlsEnabled == enable then return end
+	end
 	self.controlsEnabled = enable
 
 	if not self.activeController then
@@ -337,9 +342,13 @@ end
 
 -- For those who prefer distinct functions
 function ControlModule:Disable()
-	self.controlsEnabled = false
+	if FFlagUserControlModuleEnableIdempotent then
+		self:Enable(false)
+	else
+		self.controlsEnabled = false
 
-	self:UpdateActiveControlModuleEnabled()
+		self:UpdateActiveControlModuleEnabled()
+	end
 end
 
 

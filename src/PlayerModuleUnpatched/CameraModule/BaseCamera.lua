@@ -1,14 +1,23 @@
 --!nonstrict
 --!nolint DeprecatedApi
---[[
-	BaseCamera - Abstract base class for camera control modules
-	2018 Camera Update - AllYourBlox
---]]
+-- BaseCamera - Abstract base class for camera control modules
 
---[[ Local Constants ]]--
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VRService = game:GetService("VRService")
+local UserGameSettings = UserSettings():GetService("UserGameSettings")
 
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
+local ConnectionUtil = require(CommonUtils:WaitForChild("ConnectionUtil"))
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
+
+local CameraUtils = require(script.Parent:WaitForChild("CameraUtils"))
+local ZoomController = require(script.Parent:WaitForChild("ZoomController"))
+local CameraToggleStateController = require(script.Parent:WaitForChild("CameraToggleStateController"))
+local CameraInput = require(script.Parent:WaitForChild("CameraInput"))
+local CameraUI = require(script.Parent:WaitForChild("CameraUI"))
+
+local player = Players.LocalPlayer
 
 local FFlagUserFixGamepadMaxZoom
 do
@@ -18,12 +27,12 @@ do
 	FFlagUserFixGamepadMaxZoom = success and result
 end
 local FFlagUserFixCameraOffsetJitter = FlagUtil.getUserFlag("UserFixCameraOffsetJitter2")
+local FFlagUserOrganizeBaseCameraConnections = FlagUtil.getUserFlag("UserOrganizeBaseCameraConnections")
 
 local UNIT_Z = Vector3.new(0,0,1)
 local X1_Y0_Z1 = Vector3.new(1,0,1)	--Note: not a unit vector, used for projecting onto XZ plane
 
 local DEFAULT_DISTANCE = 12.5	-- Studs
-local PORTRAIT_DEFAULT_DISTANCE = 25		-- Studs
 local FIRST_PERSON_DISTANCE_THRESHOLD = 1.0 -- Below this value, snap into first person
 
 -- Note: DotProduct check in CoordinateFrame::lookAt() prevents using values within about
@@ -32,16 +41,11 @@ local MIN_Y = math.rad(-80)
 local MAX_Y = math.rad(80)
 
 local VR_ANGLE = math.rad(15)
-local VR_LOW_INTENSITY_ROTATION = Vector2.new(math.rad(15), 0)
-local VR_HIGH_INTENSITY_ROTATION = Vector2.new(math.rad(45), 0)
-local VR_LOW_INTENSITY_REPEAT = 0.1
-local VR_HIGH_INTENSITY_REPEAT = 0.4
 
 local ZERO_VECTOR2 = Vector2.new(0,0)
 local ZERO_VECTOR3 = Vector3.new(0,0,0)
 
 local SEAT_OFFSET = Vector3.new(0,5,0)
-local VR_SEAT_OFFSET = Vector3.new(0,4,0)
 local HEAD_OFFSET = Vector3.new(0,1.5,0)
 local R15_HEAD_OFFSET = Vector3.new(0, 1.5, 0)
 local R15_HEAD_OFFSET_NO_SCALING = Vector3.new(0, 2, 0)
@@ -50,27 +54,33 @@ local HUMANOID_ROOT_PART_SIZE = Vector3.new(2, 2, 1)
 local ZOOM_SENSITIVITY_CURVATURE = 0.5
 local FIRST_PERSON_DISTANCE_MIN = 0.5
 
-local CameraUtils = require(script.Parent:WaitForChild("CameraUtils"))
-local ZoomController = require(script.Parent:WaitForChild("ZoomController"))
-local CameraToggleStateController = require(script.Parent:WaitForChild("CameraToggleStateController"))
-local CameraInput = require(script.Parent:WaitForChild("CameraInput"))
-local CameraUI = require(script.Parent:WaitForChild("CameraUI"))
+local CONNECTIONS = {
+	CHARACTER_ADDED = "CHARACTER_ADDED",
+	CAMERA_MODE_CHANGED = "CAMERA_MODE_CHANGED",
+	CAMERA_MIN_DISTANCE_CHANGED = "CAMERA_MIN_DISTANCE_CHANGED",
+	CAMERA_MAX_DISTANCE_CHANGED = "CAMERA_MAX_DISTANCE_CHANGED",
+}
 
---[[ Roblox Services ]]--
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
-local VRService = game:GetService("VRService")
-local UserGameSettings = UserSettings():GetService("UserGameSettings")
+type BaseCameraClass = {
+	__index: BaseCameraClass,
+	new: () -> BaseCamera,
 
-local player = Players.LocalPlayer
+	-- Initializes the module based on any relevant data and sets up connections
+	-- to check for changes
+	_setUpConfigurations: (self: BaseCamera) -> (),
+}
 
---[[ The Module ]]--
+export type BaseCamera = typeof(setmetatable({} :: {
+	_connections: ConnectionUtil.ConnectionUtil,
+}, {} :: BaseCameraClass))
+
 local BaseCamera = {}
 BaseCamera.__index = BaseCamera
 
 function BaseCamera.new()
 	local self = setmetatable({}, BaseCamera)
+	
+	self._connections = ConnectionUtil.new()
 	
 	self.gamepadZoomLevels = {0, 10, 20} -- zoom levels that are cycled through on a gamepad R3 press
 	
@@ -126,64 +136,87 @@ function BaseCamera.new()
 
 	-- Mouse locked formerly known as shift lock mode
 	self.mouseLockOffset = ZERO_VECTOR3
+	
+	if not FFlagUserOrganizeBaseCameraConnections then
+		if player.Character then
+			self:OnCharacterAdded(player.Character)
+		end
+	
+		player.CharacterAdded:Connect(function(char)
+			self:OnCharacterAdded(char)
+		end)
+	
+		if self.playerCameraModeChangeConn then self.playerCameraModeChangeConn:Disconnect() end
+		self.playerCameraModeChangeConn = player:GetPropertyChangedSignal("CameraMode"):Connect(function()
+			self:OnPlayerCameraPropertyChange()
+		end)
+	
+		if self.minDistanceChangeConn then self.minDistanceChangeConn:Disconnect() end
+		self.minDistanceChangeConn = player:GetPropertyChangedSignal("CameraMinZoomDistance"):Connect(function()
+			self:OnPlayerCameraPropertyChange()
+		end)
+	
+		if self.maxDistanceChangeConn then self.maxDistanceChangeConn:Disconnect() end
+		self.maxDistanceChangeConn = player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
+			self:OnPlayerCameraPropertyChange()
+		end)
+	
+		if self.playerDevTouchMoveModeChangeConn then self.playerDevTouchMoveModeChangeConn:Disconnect() end
+		self.playerDevTouchMoveModeChangeConn = player:GetPropertyChangedSignal("DevTouchMovementMode"):Connect(function()
+			self:OnDevTouchMovementModeChanged()
+		end)
+		self:OnDevTouchMovementModeChanged() -- Init
+	
+		if self.gameSettingsTouchMoveMoveChangeConn then self.gameSettingsTouchMoveMoveChangeConn:Disconnect() end
+		self.gameSettingsTouchMoveMoveChangeConn = UserGameSettings:GetPropertyChangedSignal("TouchMovementMode"):Connect(function()
+			self:OnGameSettingsTouchMovementModeChanged()
+		end)
+		self:OnGameSettingsTouchMovementModeChanged() -- Init
+	
 
-	-- Initialization things used to always execute at game load time, but now these camera modules are instantiated
-	-- when needed, so the code here may run well after the start of the game
-
-	if player.Character then
-		self:OnCharacterAdded(player.Character)
+		self.hasGameLoaded = game:IsLoaded()
+		if not self.hasGameLoaded then
+			self.gameLoadedConn = game.Loaded:Connect(function()
+				self.hasGameLoaded = true
+				self.gameLoadedConn:Disconnect()
+				self.gameLoadedConn = nil
+			end)
+		end
+	
+		self:OnPlayerCameraPropertyChange()
 	end
-
-	player.CharacterAdded:Connect(function(char)
-		self:OnCharacterAdded(char)
-	end)
-
-	if self.playerCameraModeChangeConn then self.playerCameraModeChangeConn:Disconnect() end
-	self.playerCameraModeChangeConn = player:GetPropertyChangedSignal("CameraMode"):Connect(function()
-		self:OnPlayerCameraPropertyChange()
-	end)
-
-	if self.minDistanceChangeConn then self.minDistanceChangeConn:Disconnect() end
-	self.minDistanceChangeConn = player:GetPropertyChangedSignal("CameraMinZoomDistance"):Connect(function()
-		self:OnPlayerCameraPropertyChange()
-	end)
-
-	if self.maxDistanceChangeConn then self.maxDistanceChangeConn:Disconnect() end
-	self.maxDistanceChangeConn = player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
-		self:OnPlayerCameraPropertyChange()
-	end)
-
-	if self.playerDevTouchMoveModeChangeConn then self.playerDevTouchMoveModeChangeConn:Disconnect() end
-	self.playerDevTouchMoveModeChangeConn = player:GetPropertyChangedSignal("DevTouchMovementMode"):Connect(function()
-		self:OnDevTouchMovementModeChanged()
-	end)
-	self:OnDevTouchMovementModeChanged() -- Init
-
-	if self.gameSettingsTouchMoveMoveChangeConn then self.gameSettingsTouchMoveMoveChangeConn:Disconnect() end
-	self.gameSettingsTouchMoveMoveChangeConn = UserGameSettings:GetPropertyChangedSignal("TouchMovementMode"):Connect(function()
-		self:OnGameSettingsTouchMovementModeChanged()
-	end)
-	self:OnGameSettingsTouchMovementModeChanged() -- Init
-
+	
 	UserGameSettings:SetCameraYInvertVisible()
 	UserGameSettings:SetGamepadCameraSensitivityVisible()
-
-	self.hasGameLoaded = game:IsLoaded()
-	if not self.hasGameLoaded then
-		self.gameLoadedConn = game.Loaded:Connect(function()
-			self.hasGameLoaded = true
-			self.gameLoadedConn:Disconnect()
-			self.gameLoadedConn = nil
-		end)
-	end
-
-	self:OnPlayerCameraPropertyChange()
+	
 
 	return self
 end
 
 function BaseCamera:GetModuleName()
 	return "BaseCamera"
+end
+
+if FFlagUserOrganizeBaseCameraConnections then
+	function BaseCamera:_setUpConfigurations()
+		self._connections:trackConnection(CONNECTIONS.CHARACTER_ADDED, player.CharacterAdded:Connect(function(char)
+			self:OnCharacterAdded(char)
+		end))
+		if player.Character then
+			self:OnCharacterAdded(player.Character)
+		end
+
+		self._connections:trackConnection(CONNECTIONS.CAMERA_MODE_CHANGED, player:GetPropertyChangedSignal("CameraMode"):Connect(function()
+			self:OnPlayerCameraPropertyChange()
+		end))
+		self._connections:trackConnection(CONNECTIONS.CAMERA_MIN_DISTANCE_CHANGED, player:GetPropertyChangedSignal("CameraMinZoomDistance"):Connect(function()
+			self:OnPlayerCameraPropertyChange()
+		end))
+		self._connections:trackConnection(CONNECTIONS.CAMERA_MAX_DISTANCE_CHANGED, player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
+			self:OnPlayerCameraPropertyChange()
+		end))
+		self:OnPlayerCameraPropertyChange()
+	end
 end
 
 function BaseCamera:OnCharacterAdded(char)
@@ -507,32 +540,34 @@ function BaseCamera:OnCurrentCameraChanged()
 	end
 end
 
-function BaseCamera:OnDynamicThumbstickEnabled()
-	if UserInputService.TouchEnabled then
-		self.isDynamicThumbstickEnabled = true
-	end
-end
-
-function BaseCamera:OnDynamicThumbstickDisabled()
-	self.isDynamicThumbstickEnabled = false
-end
-
-function BaseCamera:OnGameSettingsTouchMovementModeChanged()
-	if player.DevTouchMovementMode == Enum.DevTouchMovementMode.UserChoice then
-		if (UserGameSettings.TouchMovementMode == Enum.TouchMovementMode.DynamicThumbstick
-			or UserGameSettings.TouchMovementMode == Enum.TouchMovementMode.Default) then
-			self:OnDynamicThumbstickEnabled()
-		else
-			self:OnDynamicThumbstickDisabled()
+if not FFlagUserOrganizeBaseCameraConnections then
+	function BaseCamera:OnDynamicThumbstickEnabled()
+		if UserInputService.TouchEnabled then
+			self.isDynamicThumbstickEnabled = true
 		end
 	end
-end
 
-function BaseCamera:OnDevTouchMovementModeChanged()
-	if player.DevTouchMovementMode == Enum.DevTouchMovementMode.DynamicThumbstick then
-		self:OnDynamicThumbstickEnabled()
-	else
-		self:OnGameSettingsTouchMovementModeChanged()
+	function BaseCamera:OnDynamicThumbstickDisabled()
+		self.isDynamicThumbstickEnabled = false
+	end
+
+	function BaseCamera:OnGameSettingsTouchMovementModeChanged()
+		if player.DevTouchMovementMode == Enum.DevTouchMovementMode.UserChoice then
+			if (UserGameSettings.TouchMovementMode == Enum.TouchMovementMode.DynamicThumbstick
+				or UserGameSettings.TouchMovementMode == Enum.TouchMovementMode.Default) then
+				self:OnDynamicThumbstickEnabled()
+			else
+				self:OnDynamicThumbstickDisabled()
+			end
+		end
+	end
+
+	function BaseCamera:OnDevTouchMovementModeChanged()
+		if player.DevTouchMovementMode == Enum.DevTouchMovementMode.DynamicThumbstick then
+			self:OnDynamicThumbstickEnabled()
+		else
+			self:OnGameSettingsTouchMovementModeChanged()
+		end
 	end
 end
 
@@ -602,6 +637,10 @@ end
 
 function BaseCamera:OnEnabledChanged()
 	if self.enabled then
+		if FFlagUserOrganizeBaseCameraConnections then
+			self:_setUpConfigurations()
+		end
+
 		CameraInput.setInputEnabled(true)
 
 		self.gamepadZoomPressConnection = CameraInput.gamepadZoomPress:Connect(function()
@@ -621,6 +660,10 @@ function BaseCamera:OnEnabledChanged()
 		end)
 		self:OnCurrentCameraChanged()
 	else
+		if FFlagUserOrganizeBaseCameraConnections then
+			self._connections:disconnectAll()
+		end
+
 		CameraInput.setInputEnabled(false)
 
 		if self.gamepadZoomPressConnection then

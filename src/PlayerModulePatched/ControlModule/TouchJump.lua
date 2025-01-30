@@ -13,6 +13,7 @@ local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
 local FFlagUserUpdateTouchJump = FlagUtil.getUserFlag("UserUpdateTouchJump3")
+local FFlagUserControlModuleEnableIdempotent = FlagUtil.getUserFlag("UserControlModuleEnableIdempotent")
 local ConnectionUtil
 local CharacterUtil
 if FFlagUserUpdateTouchJump then
@@ -271,6 +272,9 @@ end
 function TouchJump:Enable(enable, parentFrame)
 	if parentFrame then
 		self.parentUIFrame = parentFrame
+	end
+	if FFlagUserControlModuleEnableIdempotent then
+		if self.externallyEnabled == enable then return end
 	end
 	self.externallyEnabled = enable
 	if FFlagUserUpdateTouchJump then
