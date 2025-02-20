@@ -27,7 +27,7 @@ local GuiService = game:GetService("GuiService")
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
-local FFlagUserRaycastPerformanceImprovements = FlagUtil.getUserFlag("UserRaycastPerformanceImprovements")
+local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
 
 --[[ Configuration ]]
 local ShowPath = true
@@ -60,7 +60,7 @@ raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 --------------------------UTIL LIBRARY-------------------------------
 local Utility = {}
-if not FFlagUserRaycastPerformanceImprovements then
+if not FFlagUserRaycastUpdateAPI then
 	do
 		local function FindCharacterAncestor(part)
 			if part then
@@ -640,7 +640,7 @@ local function Pather(endPoint, surfaceNormal, overrideUseDirectPath: boolean?)
 
 	--We always raycast to the ground in the case that the user clicked a wall.
 	local offsetPoint = this.TargetPoint + this.TargetSurfaceNormal*1.5
-	if FFlagUserRaycastPerformanceImprovements then
+	if FFlagUserRaycastUpdateAPI then
 		raycastParams.FilterDescendantsInstances = getIgnoreList()
 		local raycastResult = Workspace:Raycast(offsetPoint, -Vector3.yAxis * 50, raycastParams)
 	
@@ -749,7 +749,7 @@ function OnTap(tapPositions: {Vector3}, goToPoint: Vector3?, wasTouchTap: boolea
 		if camera then
 			local unitRay = camera:ScreenPointToRay(tapPositions[1].X, tapPositions[1].Y)
 			
-			if FFlagUserRaycastPerformanceImprovements then
+			if FFlagUserRaycastUpdateAPI then
 				local humanoidResult, characterResult, raycastResult
 				local ignoreList = getIgnoreList() or {}
 				repeat

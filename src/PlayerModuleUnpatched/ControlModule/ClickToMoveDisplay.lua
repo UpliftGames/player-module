@@ -48,7 +48,7 @@ local Workspace = game:GetService("Workspace")
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
-local FFlagUserRaycastPerformanceImprovements = FlagUtil.getUserFlag("UserRaycastPerformanceImprovements")
+local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
 
 local LocalPlayer = PlayersService.LocalPlayer
 
@@ -150,7 +150,7 @@ local function getTrailDotParent()
 end
 
 local function placePathWaypoint(waypointModel, position: Vector3)
-	if FFlagUserRaycastPerformanceImprovements then
+	if FFlagUserRaycastUpdateAPI then
 		raycastParams.FilterDescendantsInstances = { Workspace.CurrentCamera, LocalPlayer.Character }
 		local raycastResult = Workspace:Raycast(position + raycastOriginOffset, raycastDirection, raycastParams)
 
@@ -268,7 +268,7 @@ end
 function FailureWaypoint:NewDisplayModel(position)
 	local newDisplayModel: Part = FailureWaypointTemplate:Clone()
 	placePathWaypoint(newDisplayModel, position)
-	if FFlagUserRaycastPerformanceImprovements then
+	if FFlagUserRaycastUpdateAPI then
 		raycastParams.FilterDescendantsInstances = { Workspace.CurrentCamera, LocalPlayer.Character }
 
 		local raycastResult = Workspace:Raycast(position + raycastOriginOffset, raycastDirection, raycastParams)

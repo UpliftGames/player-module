@@ -36,7 +36,7 @@ local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 --[[ Flags ]]--
-local FFlagUserRaycastPerformanceImprovements = FlagUtil.getUserFlag("UserRaycastPerformanceImprovements")
+local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
 
 --[[ Utility Functions ]]--
 local function IsFinite(num: number)
@@ -371,7 +371,7 @@ function VRNavigation:OnHeartbeat(dt)
 				timeReachedLastPoint = tick()
 			end
 		else
-			if FFlagUserRaycastPerformanceImprovements then
+			if FFlagUserRaycastUpdateAPI then
 				raycastParams.FilterDescendantsInstances = { (game.Players.LocalPlayer :: Player).Character, workspace.CurrentCamera}
 				local raycastResult = workspace:Raycast(currentPosition - Vector3.yAxis, moveDir * 3, raycastParams)
 			

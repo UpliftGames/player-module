@@ -11,7 +11,7 @@ local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
 --[[ Flags ]]--
-local FFlagUserRaycastPerformanceImprovements = FlagUtil.getUserFlag("UserRaycastPerformanceImprovements")
+local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
 
 --[[ Constants ]]--
 local ZERO_VECTOR3 = Vector3.new(0,0,0)
@@ -242,7 +242,7 @@ function Invisicam:CharacterOutlineBehavior(castPoints)
 
 		offset = Vector3.new(offset.X, math.max(offset.Y, -2.25), offset.Z)
 
-		if FFlagUserRaycastPerformanceImprovements then
+		if FFlagUserRaycastUpdateAPI then
 			includeParams.FilterDescendantsInstances = partsWhitelist
 			local raycastResult = game.Workspace:Raycast(centerPoint + offset, -3 * offset, includeParams)
 
@@ -302,7 +302,7 @@ function Invisicam:SmartCircleBehavior(castPoints)
 		local vp = circlePoint - self.camera.CFrame.p
 
 		
-		if FFlagUserRaycastPerformanceImprovements then
+		if FFlagUserRaycastUpdateAPI then
 			excludeParams.FilterDescendantsInstances = { self.char }
 			local raycastResult = game.Workspace:Raycast(torsoPoint, circlePoint - torsoPoint, excludeParams)
 
