@@ -6,13 +6,20 @@
 
 local Players = game:GetService("Players")
 
-local camera = game.Workspace.CurrentCamera
-
 local CommonUtils = script.Parent.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
+local CameraWrapper = require(CommonUtils:WaitForChild("CameraWrapper"))
 
 -- Flags
 local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
+local FFlagUserCurrentCameraUpdate = FlagUtil.getUserFlag("UserCurrentCameraUpdate")
+
+local cameraWrapper = if FFlagUserCurrentCameraUpdate then CameraWrapper.new() else nil
+local camera = if FFlagUserCurrentCameraUpdate then nil else game.Workspace.CurrentCamera
+
+if FFlagUserCurrentCameraUpdate then
+	cameraWrapper:Enable()
+end
 
 local min = math.min
 local tan = math.tan
@@ -38,25 +45,50 @@ local function eraseFromEnd(t, toSize)
 	end
 end
 
-local nearPlaneZ, projX, projY do
-	local function updateProjection()
-		local fov = rad(camera.FieldOfView)
-		local view = camera.ViewportSize
-		local ar = view.X/view.Y
+-- On removing the flag, put this back before the do statement
+local nearPlaneZ, projX, projY
+if FFlagUserCurrentCameraUpdate then
+	do
+		local function updateProjection()
+			local camera = cameraWrapper:getCamera()
+			local fov = rad(camera.FieldOfView)
+			local view = camera.ViewportSize
+			local ar = view.X/view.Y
 
-		projY = 2*tan(fov/2)
-		projX = ar*projY
+			projY = 2*tan(fov/2)
+			projX = ar*projY
+		end
+
+		cameraWrapper:Connect("FieldOfView", updateProjection)
+		cameraWrapper:Connect("ViewportSize", updateProjection)
+
+		updateProjection()
+
+		nearPlaneZ = cameraWrapper:getCamera().NearPlaneZ
+		cameraWrapper:Connect("NearPlaneZ", function()
+			nearPlaneZ = cameraWrapper:getCamera().NearPlaneZ
+		end)
 	end
-
-	camera:GetPropertyChangedSignal("FieldOfView"):Connect(updateProjection)
-	camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateProjection)
-
-	updateProjection()
-
-	nearPlaneZ = camera.NearPlaneZ
-	camera:GetPropertyChangedSignal("NearPlaneZ"):Connect(function()
+else
+	do
+		local function updateProjection()
+			local fov = rad(camera.FieldOfView)
+			local view = camera.ViewportSize
+			local ar = view.X/view.Y
+			projY = 2*tan(fov/2)
+			projX = ar*projY
+		end
+	
+		camera:GetPropertyChangedSignal("FieldOfView"):Connect(updateProjection)
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateProjection)
+	
+		updateProjection()
+	
 		nearPlaneZ = camera.NearPlaneZ
-	end)
+		camera:GetPropertyChangedSignal("NearPlaneZ"):Connect(function()
+			nearPlaneZ = camera.NearPlaneZ
+		end)
+	end
 end
 
 local excludeList = {} do
@@ -122,16 +154,29 @@ end
 local subjectRoot
 local subjectPart
 
-camera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-	local subject = camera.CameraSubject
-	if subject:IsA("Humanoid") then
-		subjectPart = subject.RootPart
-	elseif subject:IsA("BasePart") then
-		subjectPart = subject
-	else
-		subjectPart = nil
-	end
-end)
+if FFlagUserCurrentCameraUpdate then
+	cameraWrapper:Connect("CameraSubject", function()
+		local subject = cameraWrapper:getCamera().CameraSubject
+		if subject:IsA("Humanoid") then
+			subjectPart = subject.RootPart
+		elseif subject:IsA("BasePart") then
+			subjectPart = subject
+		else
+			subjectPart = nil
+		end
+	end)
+else
+	camera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+		local subject = camera.CameraSubject
+		if subject:IsA("Humanoid") then
+			subjectPart = subject.RootPart
+		elseif subject:IsA("BasePart") then
+			subjectPart = subject
+		else
+			subjectPart = nil
+		end
+	end)
+end
 
 local function canOcclude(part)
 	-- Occluders must be:
@@ -309,6 +354,8 @@ local function queryViewport(focus, dist)
 	local fX =  focus.rightVector
 	local fY =  focus.upVector
 	local fZ = -focus.lookVector
+
+	camera = if FFlagUserCurrentCameraUpdate then cameraWrapper:getCamera() else camera
 
 	local viewport = camera.ViewportSize
 
