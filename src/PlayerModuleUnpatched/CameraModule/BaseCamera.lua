@@ -28,6 +28,7 @@ do
 end
 local FFlagUserFixCameraOffsetJitter = FlagUtil.getUserFlag("UserFixCameraOffsetJitter2")
 local FFlagUserOrganizeBaseCameraConnections = FlagUtil.getUserFlag("UserOrganizeBaseCameraConnections")
+local FFlagUserFixCameraCameraCharacterUpdates = FlagUtil.getUserFlag("UserFixCameraCameraCharacterUpdates")
 
 local UNIT_Z = Vector3.new(0,0,1)
 local X1_Y0_Z1 = Vector3.new(1,0,1)	--Note: not a unit vector, used for projecting onto XZ plane
@@ -115,7 +116,9 @@ function BaseCamera.new()
 
 	-- Input Event Connections
 
-	self.PlayerGui = nil
+	if not FFlagUserFixCameraCameraCharacterUpdates then
+		self.PlayerGui = nil
+	end
 
 	self.cameraChangedConn = nil
 	self.viewportSizeChangedConn = nil
@@ -202,8 +205,12 @@ if FFlagUserOrganizeBaseCameraConnections then
 		self._connections:trackConnection(CONNECTIONS.CHARACTER_ADDED, player.CharacterAdded:Connect(function(char)
 			self:OnCharacterAdded(char)
 		end))
-		if player.Character then
-			self:OnCharacterAdded(player.Character)
+		if FFlagUserFixCameraCameraCharacterUpdates then
+			self.humanoidRootPart = nil
+		else
+			if player.Character then
+				self:OnCharacterAdded(player.Character)
+			end
 		end
 
 		self._connections:trackConnection(CONNECTIONS.CAMERA_MODE_CHANGED, player:GetPropertyChangedSignal("CameraMode"):Connect(function()
@@ -220,25 +227,29 @@ if FFlagUserOrganizeBaseCameraConnections then
 end
 
 function BaseCamera:OnCharacterAdded(char)
+	-- the camera should only reset when the character dies and respawns
+	-- not when the camera disables and reenables
 	self.resetCameraAngle = self.resetCameraAngle or self:GetEnabled()
 	self.humanoidRootPart = nil
-	if UserInputService.TouchEnabled then
-		self.PlayerGui = player:WaitForChild("PlayerGui")
-		for _, child in ipairs(char:GetChildren()) do
-			if child:IsA("Tool") then
-				self.isAToolEquipped = true
+	if not FFlagUserFixCameraCameraCharacterUpdates then
+		if UserInputService.TouchEnabled then
+			self.PlayerGui = player:WaitForChild("PlayerGui")
+			for _, child in ipairs(char:GetChildren()) do
+				if child:IsA("Tool") then
+					self.isAToolEquipped = true
+				end
 			end
+			char.ChildAdded:Connect(function(child)
+				if child:IsA("Tool") then
+					self.isAToolEquipped = true
+				end
+			end)
+			char.ChildRemoved:Connect(function(child)
+				if child:IsA("Tool") then
+					self.isAToolEquipped = false
+				end
+			end)
 		end
-		char.ChildAdded:Connect(function(child)
-			if child:IsA("Tool") then
-				self.isAToolEquipped = true
-			end
-		end)
-		char.ChildRemoved:Connect(function(child)
-			if child:IsA("Tool") then
-				self.isAToolEquipped = false
-			end
-		end)
 	end
 end
 
