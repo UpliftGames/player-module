@@ -23,7 +23,6 @@ local FIRST_PERSON_DISTANCE_MIN = 0.5
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
-local FFlagUserFixCameraOffsetJitter = FlagUtil.getUserFlag("UserFixCameraOffsetJitter2")
 local FFlagUserCameraInputDt = FlagUtil.getUserFlag("UserCameraInputDt")
 local FFlagUserFixCameraFPError = FlagUtil.getUserFlag("UserFixCameraFPError")
 
@@ -134,11 +133,9 @@ function ClassicCamera:Update(dt)
 			local newLookCFrame: CFrame = self:CalculateNewLookCFrameFromArg(overrideCameraLookVector, rotateInput)
 
 			local offset: Vector3 = self:GetMouseLockOffset()
-			if FFlagUserFixCameraOffsetJitter then
-				-- in mouse lock mode, the offset is applied to the camera instead of to the subject position
-				if humanoid then
-					offset += humanoid.CameraOffset
-				end
+			-- in mouse lock mode, the offset is applied to the camera instead of to the subject position
+			if humanoid then
+				offset += humanoid.CameraOffset
 			end
 			local cameraRelativeOffset: Vector3 = offset.X * newLookCFrame.RightVector + offset.Y * newLookCFrame.UpVector + offset.Z * newLookCFrame.LookVector
 

@@ -26,8 +26,7 @@ do
 	end)
 	FFlagUserFixGamepadMaxZoom = success and result
 end
-local FFlagUserFixCameraOffsetJitter = FlagUtil.getUserFlag("UserFixCameraOffsetJitter2")
-local FFlagUserOrganizeBaseCameraConnections = FlagUtil.getUserFlag("UserOrganizeBaseCameraConnections")
+
 local FFlagUserFixCameraCameraCharacterUpdates = FlagUtil.getUserFlag("UserFixCameraCameraCharacterUpdates")
 
 local UNIT_Z = Vector3.new(0,0,1)
@@ -140,55 +139,6 @@ function BaseCamera.new()
 	-- Mouse locked formerly known as shift lock mode
 	self.mouseLockOffset = ZERO_VECTOR3
 	
-	if not FFlagUserOrganizeBaseCameraConnections then
-		if player.Character then
-			self:OnCharacterAdded(player.Character)
-		end
-	
-		player.CharacterAdded:Connect(function(char)
-			self:OnCharacterAdded(char)
-		end)
-	
-		if self.playerCameraModeChangeConn then self.playerCameraModeChangeConn:Disconnect() end
-		self.playerCameraModeChangeConn = player:GetPropertyChangedSignal("CameraMode"):Connect(function()
-			self:OnPlayerCameraPropertyChange()
-		end)
-	
-		if self.minDistanceChangeConn then self.minDistanceChangeConn:Disconnect() end
-		self.minDistanceChangeConn = player:GetPropertyChangedSignal("CameraMinZoomDistance"):Connect(function()
-			self:OnPlayerCameraPropertyChange()
-		end)
-	
-		if self.maxDistanceChangeConn then self.maxDistanceChangeConn:Disconnect() end
-		self.maxDistanceChangeConn = player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
-			self:OnPlayerCameraPropertyChange()
-		end)
-	
-		if self.playerDevTouchMoveModeChangeConn then self.playerDevTouchMoveModeChangeConn:Disconnect() end
-		self.playerDevTouchMoveModeChangeConn = player:GetPropertyChangedSignal("DevTouchMovementMode"):Connect(function()
-			self:OnDevTouchMovementModeChanged()
-		end)
-		self:OnDevTouchMovementModeChanged() -- Init
-	
-		if self.gameSettingsTouchMoveMoveChangeConn then self.gameSettingsTouchMoveMoveChangeConn:Disconnect() end
-		self.gameSettingsTouchMoveMoveChangeConn = UserGameSettings:GetPropertyChangedSignal("TouchMovementMode"):Connect(function()
-			self:OnGameSettingsTouchMovementModeChanged()
-		end)
-		self:OnGameSettingsTouchMovementModeChanged() -- Init
-	
-
-		self.hasGameLoaded = game:IsLoaded()
-		if not self.hasGameLoaded then
-			self.gameLoadedConn = game.Loaded:Connect(function()
-				self.hasGameLoaded = true
-				self.gameLoadedConn:Disconnect()
-				self.gameLoadedConn = nil
-			end)
-		end
-	
-		self:OnPlayerCameraPropertyChange()
-	end
-	
 	UserGameSettings:SetCameraYInvertVisible()
 	UserGameSettings:SetGamepadCameraSensitivityVisible()
 	
@@ -200,30 +150,28 @@ function BaseCamera:GetModuleName()
 	return "BaseCamera"
 end
 
-if FFlagUserOrganizeBaseCameraConnections then
-	function BaseCamera:_setUpConfigurations()
-		self._connections:trackConnection(CONNECTIONS.CHARACTER_ADDED, player.CharacterAdded:Connect(function(char)
-			self:OnCharacterAdded(char)
-		end))
-		if FFlagUserFixCameraCameraCharacterUpdates then
-			self.humanoidRootPart = nil
-		else
-			if player.Character then
-				self:OnCharacterAdded(player.Character)
-			end
+function BaseCamera:_setUpConfigurations()
+	self._connections:trackConnection(CONNECTIONS.CHARACTER_ADDED, player.CharacterAdded:Connect(function(char)
+		self:OnCharacterAdded(char)
+	end))
+	if FFlagUserFixCameraCameraCharacterUpdates then
+		self.humanoidRootPart = nil
+	else
+		if player.Character then
+			self:OnCharacterAdded(player.Character)
 		end
-
-		self._connections:trackConnection(CONNECTIONS.CAMERA_MODE_CHANGED, player:GetPropertyChangedSignal("CameraMode"):Connect(function()
-			self:OnPlayerCameraPropertyChange()
-		end))
-		self._connections:trackConnection(CONNECTIONS.CAMERA_MIN_DISTANCE_CHANGED, player:GetPropertyChangedSignal("CameraMinZoomDistance"):Connect(function()
-			self:OnPlayerCameraPropertyChange()
-		end))
-		self._connections:trackConnection(CONNECTIONS.CAMERA_MAX_DISTANCE_CHANGED, player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
-			self:OnPlayerCameraPropertyChange()
-		end))
-		self:OnPlayerCameraPropertyChange()
 	end
+
+	self._connections:trackConnection(CONNECTIONS.CAMERA_MODE_CHANGED, player:GetPropertyChangedSignal("CameraMode"):Connect(function()
+		self:OnPlayerCameraPropertyChange()
+	end))
+	self._connections:trackConnection(CONNECTIONS.CAMERA_MIN_DISTANCE_CHANGED, player:GetPropertyChangedSignal("CameraMinZoomDistance"):Connect(function()
+		self:OnPlayerCameraPropertyChange()
+	end))
+	self._connections:trackConnection(CONNECTIONS.CAMERA_MAX_DISTANCE_CHANGED, player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
+		self:OnPlayerCameraPropertyChange()
+	end))
+	self:OnPlayerCameraPropertyChange()
 end
 
 function BaseCamera:OnCharacterAdded(char)
@@ -294,7 +242,7 @@ function BaseCamera:GetSubjectCFrame(): CFrame
 		local cameraOffset = humanoid.CameraOffset
 		-- when in mouse lock mode, the character's rotation follows the camera instead of vice versa.
 		-- Allow the mouse lock calculation to be camera based instead of subject based to prevent jitter
-		if FFlagUserFixCameraOffsetJitter and self:GetIsMouseLocked() then
+		if self:GetIsMouseLocked() then
 			cameraOffset = Vector3.new()
 		end
 
@@ -447,7 +395,7 @@ function BaseCamera:GetSubjectPosition(): Vector3?
 			local cameraOffset = humanoid.CameraOffset
 			-- when in mouse lock mode, the character's rotation follows the camera instead of vice versa.
 			-- Allow the mouse lock calculation to be camera based instead of subject based to prevent jitter
-			if FFlagUserFixCameraOffsetJitter and self:GetIsMouseLocked() then
+			if self:GetIsMouseLocked() then
 				cameraOffset = Vector3.new()
 			end
 
@@ -551,37 +499,6 @@ function BaseCamera:OnCurrentCameraChanged()
 	end
 end
 
-if not FFlagUserOrganizeBaseCameraConnections then
-	function BaseCamera:OnDynamicThumbstickEnabled()
-		if UserInputService.TouchEnabled then
-			self.isDynamicThumbstickEnabled = true
-		end
-	end
-
-	function BaseCamera:OnDynamicThumbstickDisabled()
-		self.isDynamicThumbstickEnabled = false
-	end
-
-	function BaseCamera:OnGameSettingsTouchMovementModeChanged()
-		if player.DevTouchMovementMode == Enum.DevTouchMovementMode.UserChoice then
-			if (UserGameSettings.TouchMovementMode == Enum.TouchMovementMode.DynamicThumbstick
-				or UserGameSettings.TouchMovementMode == Enum.TouchMovementMode.Default) then
-				self:OnDynamicThumbstickEnabled()
-			else
-				self:OnDynamicThumbstickDisabled()
-			end
-		end
-	end
-
-	function BaseCamera:OnDevTouchMovementModeChanged()
-		if player.DevTouchMovementMode == Enum.DevTouchMovementMode.DynamicThumbstick then
-			self:OnDynamicThumbstickEnabled()
-		else
-			self:OnGameSettingsTouchMovementModeChanged()
-		end
-	end
-end
-
 function BaseCamera:OnPlayerCameraPropertyChange()
 	-- This call forces re-evaluation of player.CameraMode and clamping to min/max distance which may have changed
 	self:SetCameraToSubjectDistance(self.currentSubjectDistance)
@@ -648,9 +565,7 @@ end
 
 function BaseCamera:OnEnabledChanged()
 	if self.enabled then
-		if FFlagUserOrganizeBaseCameraConnections then
-			self:_setUpConfigurations()
-		end
+		self:_setUpConfigurations()
 
 		CameraInput.setInputEnabled(true)
 
@@ -671,9 +586,7 @@ function BaseCamera:OnEnabledChanged()
 		end)
 		self:OnCurrentCameraChanged()
 	else
-		if FFlagUserOrganizeBaseCameraConnections then
-			self._connections:disconnectAll()
-		end
+		self._connections:disconnectAll()
 
 		CameraInput.setInputEnabled(false)
 

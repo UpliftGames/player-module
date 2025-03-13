@@ -23,7 +23,6 @@ local GameSettings = Settings.GameSettings
 --[[ Imports ]]
 local CameraUtils = require(script.Parent:WaitForChild("CameraUtils"))
 
-local FFlagUserFixCameraOffsetJitter = FlagUtil.getUserFlag("UserFixCameraOffsetJitter2")
 
 --[[ The Module ]]--
 local MouseLockController = {}
@@ -91,30 +90,7 @@ function MouseLockController:GetBindableToggleEvent()
 end
 
 function MouseLockController:GetMouseLockOffset()
-	if FFlagUserFixCameraOffsetJitter then
-		return CAMERA_OFFSET_DEFAULT 
-	else
-		local offsetValueObj: Vector3Value = script:FindFirstChild("CameraOffset") :: Vector3Value
-		if offsetValueObj and offsetValueObj:IsA("Vector3Value") then
-			return offsetValueObj.Value
-		else
-			-- If CameraOffset object was found but not correct type, destroy
-			if offsetValueObj then
-				offsetValueObj:Destroy()
-			end
-			offsetValueObj = Instance.new("Vector3Value")
-			assert(offsetValueObj, "")
-			offsetValueObj.Name = "CameraOffset"
-			offsetValueObj.Value = Vector3.new(1.75,0,0) -- Legacy Default Value
-			offsetValueObj.Parent = script
-		end
-
-		if offsetValueObj and offsetValueObj.Value then
-			return offsetValueObj.Value
-		end
-
-		return Vector3.new(1.75,0,0)
-	end
+	return CAMERA_OFFSET_DEFAULT
 end
 
 function MouseLockController:UpdateMouseLockAvailability()
