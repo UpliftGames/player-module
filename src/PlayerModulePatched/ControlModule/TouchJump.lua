@@ -10,16 +10,9 @@ local Players = game:GetService("Players")
 local GuiService = game:GetService("GuiService")
 
 local CommonUtils = script.Parent.Parent:WaitForChild("CommonUtils")
-local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
-local FFlagUserUpdateTouchJump = FlagUtil.getUserFlag("UserUpdateTouchJump3")
-local FFlagUserControlModuleEnableIdempotent = FlagUtil.getUserFlag("UserControlModuleEnableIdempotent")
-local ConnectionUtil
-local CharacterUtil
-if FFlagUserUpdateTouchJump then
-	ConnectionUtil = require(CommonUtils:WaitForChild("ConnectionUtil"))
-	CharacterUtil = require(CommonUtils:WaitForChild("CharacterUtil"))
-end
+local ConnectionUtil = require(CommonUtils:WaitForChild("ConnectionUtil"))
+local CharacterUtil = require(CommonUtils:WaitForChild("CharacterUtil"))
 
 local TOUCH_CONTROL_SHEET = "rbxasset://textures/ui/Input/TouchControlsSheetV2.png"
 local CONNECTIONS = {
@@ -60,27 +53,14 @@ function TouchJump.new()
 	self.parentUIFrame = nil
 	self.jumpButton = nil
 
-	if not FFlagUserUpdateTouchJump then
-		self.characterAddedConn = nil -- remove with FFlagUserUpdateTouchJump
-		self.humanoidStateEnabledChangedConn = nil -- remove with FFlagUserUpdateTouchJump
-		self.humanoidJumpPowerConn = nil -- remove with FFlagUserUpdateTouchJump
-		self.humanoidParentConn = nil -- remove with FFlagUserUpdateTouchJump
-		self.jumpPower = 0 -- remove with FFlagUserUpdateTouchJump
-		self.jumpStateEnabled = true -- remove with FFlagUserUpdateTouchJump
-		self.humanoid = nil -- saved reference because property change connections are made using it - remove with FFlagUserUpdateTouchJump
-	end
-
 	self.externallyEnabled = false
 	self.isJumping = false
-	if FFlagUserUpdateTouchJump then
-		self._active = false
-		self._connectionUtil = ConnectionUtil.new()
-	end
+	self._active = false
+	self._connectionUtil = ConnectionUtil.new()
 
 	return self
 end
 
-if FFlagUserUpdateTouchJump then
 function TouchJump:_reset()
 	self.isJumping = false
 	self.touchObject = nil
@@ -88,205 +68,101 @@ function TouchJump:_reset()
 		self.jumpButton.ImageRectOffset = Vector2.new(1, 146)
 	end
 end
-end
 
 -- May be called multiple times with the same enabled state. This is because changes to state
 -- such as humanoid death should reset the jump state, but may leave the overall button enabled unchanged
 function TouchJump:EnableButton(enable)
-	if FFlagUserUpdateTouchJump then
-		if enable == self._active then
-			self:_reset()
-			return
-		end
-
-		if enable then
-			if not self.jumpButton then
-				self:Create()
-			end
-			self.jumpButton.Visible = true
-
-			-- input connections
-			-- stop jumping connection
-			self._connectionUtil:trackConnection(
-				CONNECTIONS.JUMP_INPUT_ENDED,
-				self.jumpButton.InputEnded:Connect(function(inputObject)
-					if inputObject == self.touchObject then
-						self:_reset()
-					end
-				end)
-			)
-
-			-- stop jumping on menu open
-			self._connectionUtil:trackConnection(
-				CONNECTIONS.MENU_OPENED,
-				GuiService.MenuOpened:Connect(function()
-					if self.touchObject then
-						self:_reset()
-					end
-				end)
-			)
-		else
-			if self.jumpButton then
-				self.jumpButton.Visible = false
-			end
-			self._connectionUtil:disconnect(CONNECTIONS.JUMP_INPUT_ENDED)
-			self._connectionUtil:disconnect(CONNECTIONS.MENU_OPENED)
-		end
+	if enable == self._active then
 		self:_reset()
-		self._active = enable
-	else
-		if enable then
-			if not self.jumpButton then
-				self:Create()
-			end
-			local humanoid = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-			if humanoid and self.externallyEnabled then
-				if self.externallyEnabled then
-					if humanoid.JumpPower > 0 then
-						self.jumpButton.Visible = true
-					end
-				end
-			end
-		else
-			self.jumpButton.Visible = false
-			self.touchObject = nil
-			self.isJumping = false
-			self.jumpButton.ImageRectOffset = Vector2.new(1, 146)
-		end
+		return
 	end
+
+	if enable then
+		if not self.jumpButton then
+			self:Create()
+		end
+		self.jumpButton.Visible = true
+
+		-- input connections
+		-- stop jumping connection
+		self._connectionUtil:trackConnection(
+			CONNECTIONS.JUMP_INPUT_ENDED,
+			self.jumpButton.InputEnded:Connect(function(inputObject)
+				if inputObject == self.touchObject then
+					self:_reset()
+				end
+			end)
+		)
+
+		-- stop jumping on menu open
+		self._connectionUtil:trackConnection(
+			CONNECTIONS.MENU_OPENED,
+			GuiService.MenuOpened:Connect(function()
+				if self.touchObject then
+					self:_reset()
+				end
+			end)
+		)
+	else
+		if self.jumpButton then
+			self.jumpButton.Visible = false
+		end
+		self._connectionUtil:disconnect(CONNECTIONS.JUMP_INPUT_ENDED)
+		self._connectionUtil:disconnect(CONNECTIONS.MENU_OPENED)
+	end
+	self:_reset()
+	self._active = enable
 end
 
 function TouchJump:UpdateEnabled()
-	if FFlagUserUpdateTouchJump then
 		local humanoid = CharacterUtil.getChild("Humanoid", "Humanoid") 
 		if humanoid and self.externallyEnabled and humanoid.JumpPower > 0 and humanoid:GetStateEnabled(Enum.HumanoidStateType.Jumping) then
 			self:EnableButton(true)
 		else
 			self:EnableButton(false)
 		end
-	else
-		if self.jumpPower > 0 and self.jumpStateEnabled then
-			self:EnableButton(true)
-		else
-			self:EnableButton(false)
-		end
-	end
 end
 
-if FFlagUserUpdateTouchJump then
-	function TouchJump:_setupConfigurations()
-		local function update()
-			self:UpdateEnabled()
-		end
-
-		-- listen to jump APIs on the humanoid
-		local humanoidConnection = CharacterUtil.onChild("Humanoid", "Humanoid", function(humanoid)
-			update()
-			self._connectionUtil:trackConnection(
-				CONNECTIONS.HUMANOID_JUMP_POWER,
-				humanoid:GetPropertyChangedSignal("JumpPower"):Connect(update)
-			)
-			self._connectionUtil:trackConnection(
-				CONNECTIONS.HUMANOID_STATE_ENABLED_CHANGED,
-				humanoid.StateEnabledChanged:Connect(function(state, isEnabled)
-					-- The isEnabled ~= self._active check is necessary because there's currently a bug
-					-- where the StateEnabledChanged event will fire even with no state changes
-					if state == Enum.HumanoidStateType.Jumping and isEnabled ~= self._active then
-						update()
-					end
-				end)
-			)
-		end)
-		self._connectionUtil:trackConnection(CONNECTIONS.HUMANOID, humanoidConnection)
-	end
-end
-
-if not FFlagUserUpdateTouchJump then
-	function TouchJump:HumanoidChanged(prop) -- remove with FFlagUserUpdateTouchJump
-		local humanoid = Players.LocalPlayer.Character
-			and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			if prop == "JumpPower" then
-				self.jumpPower = humanoid.JumpPower
-				self:UpdateEnabled()
-			elseif prop == "Parent" then
-				if not humanoid.Parent then
-					self.humanoidChangeConn:Disconnect()
-				end
-			end
-		end
-	end
-
-	function TouchJump:HumanoidStateEnabledChanged(state, isEnabled) -- remove with FFlagUserUpdateTouchJump
-		if state == Enum.HumanoidStateType.Jumping then
-			self.jumpStateEnabled = isEnabled
-			self:UpdateEnabled()
-		end
-	end
-
-	function TouchJump:CharacterAdded(char) -- remove with FFlagUserUpdateTouchJump
-		if self.humanoidChangeConn then
-			self.humanoidChangeConn:Disconnect()
-			self.humanoidChangeConn = nil
-		end
-
-		self.humanoid = char:FindFirstChildOfClass("Humanoid")
-		while not self.humanoid do
-			char.ChildAdded:wait()
-			self.humanoid = char:FindFirstChildOfClass("Humanoid")
-		end
-
-		self.humanoidJumpPowerConn = self.humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function()
-			self.jumpPower = self.humanoid.JumpPower
-			self:UpdateEnabled()
-		end)
-
-		self.humanoidParentConn = self.humanoid:GetPropertyChangedSignal("Parent"):Connect(function()
-			if not self.humanoid.Parent then
-				self.humanoidJumpPowerConn:Disconnect()
-				self.humanoidJumpPowerConn = nil
-				self.humanoidParentConn:Disconnect()
-				self.humanoidParentConn = nil
-			end
-		end)
-
-		self.humanoidStateEnabledChangedConn = self.humanoid.StateEnabledChanged:Connect(function(state, enabled)
-			self:HumanoidStateEnabledChanged(state, enabled)
-		end)
-
-		self.jumpPower = self.humanoid.JumpPower
-		self.jumpStateEnabled = self.humanoid:GetStateEnabled(Enum.HumanoidStateType.Jumping)
+function TouchJump:_setupConfigurations()
+	local function update()
 		self:UpdateEnabled()
 	end
 
-	function TouchJump:SetupCharacterAddedFunction() -- remove with FFlagUserUpdateTouchJump
-		self.characterAddedConn = Players.LocalPlayer.CharacterAdded:Connect(function(char)
-			self:CharacterAdded(char)
-		end)
-		if Players.LocalPlayer.Character then
-			self:CharacterAdded(Players.LocalPlayer.Character)
-		end
-	end
+	-- listen to jump APIs on the humanoid
+	local humanoidConnection = CharacterUtil.onChild("Humanoid", "Humanoid", function(humanoid)
+		update()
+		self._connectionUtil:trackConnection(
+			CONNECTIONS.HUMANOID_JUMP_POWER,
+			humanoid:GetPropertyChangedSignal("JumpPower"):Connect(update)
+		)
+		self._connectionUtil:trackConnection(
+			CONNECTIONS.HUMANOID_STATE_ENABLED_CHANGED,
+			humanoid.StateEnabledChanged:Connect(function(state, isEnabled)
+				-- The isEnabled ~= self._active check is necessary because there's currently a bug
+				-- where the StateEnabledChanged event will fire even with no state changes
+				if state == Enum.HumanoidStateType.Jumping and isEnabled ~= self._active then
+					update()
+				end
+			end)
+		)
+	end)
+	self._connectionUtil:trackConnection(CONNECTIONS.HUMANOID, humanoidConnection)
 end
 
 function TouchJump:Enable(enable, parentFrame)
 	if parentFrame then
 		self.parentUIFrame = parentFrame
 	end
-	if FFlagUserControlModuleEnableIdempotent then
-		if self.externallyEnabled == enable then return end
-	end
-	self.externallyEnabled = enable
-	if FFlagUserUpdateTouchJump then
-		self:UpdateEnabled()
 
-		if enable then
-			self:_setupConfigurations()
-		else
-			self._connectionUtil:disconnectAll()
-		end
+	if self.externallyEnabled == enable then return end
+	self.externallyEnabled = enable
+
+	self:UpdateEnabled()
+
+	if enable then
+		self:_setupConfigurations()
 	else
-		self:EnableButton(enable)
+		self._connectionUtil:disconnectAll()
 	end
 end
 
@@ -339,30 +215,6 @@ function TouchJump:Create()
 		self.jumpButton.ImageRectOffset = Vector2.new(146, 146)
 		self.isJumping = true
 	end)
-
-	if not FFlagUserUpdateTouchJump then
-		local OnInputEnded = function()
-			self.touchObject = nil
-			self.isJumping = false
-			self.jumpButton.ImageRectOffset = Vector2.new(1, 146)
-		end
-	
-		self.jumpButton.InputEnded:connect(function(inputObject: InputObject)
-			if inputObject == self.touchObject then
-				OnInputEnded()
-			end
-		end)
-	
-		GuiService.MenuOpened:connect(function()
-			if self.touchObject then
-				OnInputEnded()
-			end
-		end)
-
-		if not self.characterAddedConn then
-			self:SetupCharacterAddedFunction()
-		end
-	end
 
 	self.jumpButton.Parent = self.parentUIFrame
 end
