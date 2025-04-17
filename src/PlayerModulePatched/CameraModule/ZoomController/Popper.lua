@@ -12,7 +12,7 @@ local CameraWrapper = require(CommonUtils:WaitForChild("CameraWrapper"))
 
 -- Flags
 local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
-local FFlagUserCurrentCameraUpdate = FlagUtil.getUserFlag("UserCurrentCameraUpdate")
+local FFlagUserCurrentCameraUpdate = FlagUtil.getUserFlag("UserCurrentCameraUpdate2")
 
 local cameraWrapper = if FFlagUserCurrentCameraUpdate then CameraWrapper.new() else nil
 local camera = if FFlagUserCurrentCameraUpdate then nil else game.Workspace.CurrentCamera
@@ -157,9 +157,9 @@ local subjectPart
 if FFlagUserCurrentCameraUpdate then
 	cameraWrapper:Connect("CameraSubject", function()
 		local subject = cameraWrapper:getCamera().CameraSubject
-		if subject:IsA("Humanoid") then
+		if subject and subject:IsA("Humanoid") then
 			subjectPart = subject.RootPart
-		elseif subject:IsA("BasePart") then
+		elseif subject and subject:IsA("BasePart") then
 			subjectPart = subject
 		else
 			subjectPart = nil
