@@ -53,6 +53,7 @@ local VRService = game:GetService("VRService")
 local UserGameSettings = UserSettings():GetService("UserGameSettings")
 
 local CommonUtils = script.Parent:WaitForChild("CommonUtils")
+local ConnectionUtil = require(CommonUtils:WaitForChild("ConnectionUtil"))
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 
 -- Static camera utils
@@ -95,6 +96,7 @@ do
 end
 
 local FFlagUserRespectLegacyCameraOptions = FlagUtil.getUserFlag("UserRespectLegacyCameraOptions")
+local FFlagUserPlayerConnectionMemoryLeak = FlagUtil.getUserFlag("UserPlayerConnectionMemoryLeak")
 
 function CameraModule.new()
 	local self = setmetatable({},CameraModule)
@@ -111,6 +113,10 @@ function CameraModule.new()
 	self.cameraSubjectChangedConn = nil
 	self.cameraTypeChangedConn = nil
 
+	if FFlagUserPlayerConnectionMemoryLeak then
+		self.connectionUtil = ConnectionUtil.new()
+	end
+
 	-- Adds CharacterAdded and CharacterRemoving event handlers for all current players
 	for _,player in pairs(Players:GetPlayers()) do
 		self:OnPlayerAdded(player)
@@ -120,6 +126,12 @@ function CameraModule.new()
 	Players.PlayerAdded:Connect(function(player)
 		self:OnPlayerAdded(player)
 	end)
+
+	if FFlagUserPlayerConnectionMemoryLeak then
+		Players.PlayerRemoving:Connect(function(player)
+			self:OnPlayerRemoving(player)
+		end)
+	end
 
 	self.activeTransparencyController = TransparencyController.new()
 	self.activeTransparencyController:Enable(true)
@@ -568,12 +580,26 @@ function CameraModule:OnCharacterRemoving(char, player)
 end
 
 function CameraModule:OnPlayerAdded(player)
-	player.CharacterAdded:Connect(function(char)
-		self:OnCharacterAdded(char, player)
-	end)
-	player.CharacterRemoving:Connect(function(char)
-		self:OnCharacterRemoving(char, player)
-	end)
+	if FFlagUserPlayerConnectionMemoryLeak then
+		self.connectionUtil:trackConnection(`{player.UserId}CharacterAdded`, player.CharacterAdded:Connect(function(char)
+			self:OnCharacterAdded(char, player)
+		end))
+		self.connectionUtil:trackConnection(`{player.UserId}CharacterRemoving`, player.CharacterRemoving:Connect(function(char)
+			self:OnCharacterRemoving(char, player)
+		end))
+	else
+		player.CharacterAdded:Connect(function(char)
+			self:OnCharacterAdded(char, player)
+		end)
+		player.CharacterRemoving:Connect(function(char)
+			self:OnCharacterRemoving(char, player)
+		end)
+	end
+end
+
+function CameraModule:OnPlayerRemoving(player)
+	self.connectionUtil:disconnect(`{player.UserId}CharacterAdded`)
+	self.connectionUtil:disconnect(`{player.UserId}CharacterRemoving`)
 end
 
 function CameraModule:OnMouseLockToggled()

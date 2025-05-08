@@ -9,10 +9,12 @@ local Players = game:GetService("Players")
 local CommonUtils = script.Parent.Parent.Parent:WaitForChild("CommonUtils")
 local FlagUtil = require(CommonUtils:WaitForChild("FlagUtil"))
 local CameraWrapper = require(CommonUtils:WaitForChild("CameraWrapper"))
+local ConnectionUtil = require(CommonUtils:WaitForChild("ConnectionUtil"))
 
 -- Flags
 local FFlagUserRaycastUpdateAPI = FlagUtil.getUserFlag("UserRaycastUpdateAPI")
 local FFlagUserCurrentCameraUpdate = FlagUtil.getUserFlag("UserCurrentCameraUpdate2")
+local FFlagUserPlayerConnectionMemoryLeak = FlagUtil.getUserFlag("UserPlayerConnectionMemoryLeak")
 
 local cameraWrapper = if FFlagUserCurrentCameraUpdate then CameraWrapper.new() else nil
 local camera = if FFlagUserCurrentCameraUpdate then nil else game.Workspace.CurrentCamera
@@ -34,6 +36,8 @@ excludeParams.FilterType = Enum.RaycastFilterType.Exclude
 local includeParams = RaycastParams.new()
 includeParams.IgnoreWater = true
 includeParams.FilterType = Enum.RaycastFilterType.Include
+
+local connectionUtil = if FFlagUserPlayerConnectionMemoryLeak then ConnectionUtil.new() else nil
 
 local function getTotalTransparency(part)
 	return 1 - (1 - part.Transparency)*(1 - part.LocalTransparencyModifier)
@@ -113,8 +117,14 @@ local excludeList = {} do
 			refreshIgnoreList()
 		end
 
-		player.CharacterAdded:Connect(characterAdded)
-		player.CharacterRemoving:Connect(characterRemoving)
+		if FFlagUserPlayerConnectionMemoryLeak then
+			connectionUtil:trackConnection(`{player.UserId}CharacterAdded`, player.CharacterAdded:Connect(characterAdded))
+			connectionUtil:trackConnection(`{player.UserId}CharacterRemoving`, player.CharacterRemoving:Connect(characterRemoving))
+		else
+			player.CharacterAdded:Connect(characterAdded)
+			player.CharacterRemoving:Connect(characterRemoving)
+		end
+
 		if player.Character then
 			characterAdded(player.Character)
 		end
@@ -123,6 +133,11 @@ local excludeList = {} do
 	local function playerRemoving(player)
 		charMap[player] = nil
 		refreshIgnoreList()
+
+		if FFlagUserPlayerConnectionMemoryLeak then
+			connectionUtil:disconnect(`{player.UserId}CharacterAdded`)
+			connectionUtil:disconnect(`{player.UserId}CharacterRemoving`)
+		end
 	end
 
 	Players.PlayerAdded:Connect(playerAdded)
