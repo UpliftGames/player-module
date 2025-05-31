@@ -1,4 +1,4 @@
---!nonstrict
+--!strict
 --[[
 	CameraModule - This ModuleScript implements a singleton class to manage the
 	selection, activation, and deactivation of the current camera controller,
@@ -81,9 +81,14 @@ local MouseLockController = require(script:WaitForChild("MouseLockController"))
 local instantiatedCameraControllers = {}
 local instantiatedOcclusionModules = {}
 
+if not Players.LocalPlayer then
+	return {}
+end
+assert(Players.LocalPlayer, "Strict typing check")
+
 -- Management of which options appear on the Roblox User Settings screen
 do
-	local PlayerScripts = Players.LocalPlayer:WaitForChild("PlayerScripts")
+	local PlayerScripts: PlayerScripts = Players.LocalPlayer:WaitForChild("PlayerScripts") :: PlayerScripts
 
 	PlayerScripts:RegisterTouchCameraMovementMode(Enum.TouchCameraMovementMode.Default)
 	PlayerScripts:RegisterTouchCameraMovementMode(Enum.TouchCameraMovementMode.Follow)
@@ -98,13 +103,53 @@ end
 local FFlagUserRespectLegacyCameraOptions = FlagUtil.getUserFlag("UserRespectLegacyCameraOptions")
 local FFlagUserPlayerConnectionMemoryLeak = FlagUtil.getUserFlag("UserPlayerConnectionMemoryLeak")
 
+-- Change this later as types are added for more classes
+type Generic = any
+type GenericOptional = any?
+
+type CameraModuleClass = {
+	__index: CameraModuleClass,
+	new: () -> CameraModule,
+
+	ActivateCameraController: (self: CameraModule, cameraMovementMode: Enum.ComputerCameraMovementMode? | Enum.DevComputerCameraMovementMode?, legacyCameraType: Enum.CameraType?) -> (),
+	ActivateOcclusionModule: (self: CameraModule, occlusionMode: Enum.DevCameraOcclusionMode) -> (),
+	GetCameraControlChoice: (self: CameraModule) -> Enum.ComputerCameraMovementMode | Enum.DevComputerCameraMovementMode,
+	GetCameraMovementModeFromSettings: (self: CameraModule) -> Enum.ComputerCameraMovementMode | Enum.DevComputerCameraMovementMode,
+	OnCameraSubjectChanged: (self: CameraModule) -> (),
+	OnCameraTypeChanged: (self: CameraModule, newCameraType: Enum.CameraType) -> (),
+	OnCharacterAdded: (self: CameraModule, character: Model, player: Player) -> (),
+	OnCharacterRemoving: (self: CameraModule, character: Model, player: Player) -> (),
+	OnCurrentCameraChanged: (self: CameraModule) -> (),
+	OnLocalPlayerCameraPropertyChanged: (self: CameraModule, propertyName: string) -> (),
+	OnPlayerAdded: (self: CameraModule, player: Player) -> (),
+	OnPlayerRemoving: (self: CameraModule, player: Player) -> (),
+	OnMouseLockToggled: (self: CameraModule) -> (),
+	OnUserGameSettingsPropertyChanged: (self: CameraModule, propertyName: string) -> (),
+	ShouldUseVehicleCamera: (self: CameraModule) -> boolean,
+	Update: (self: CameraModule, dt: number) -> (),
+}
+
+export type CameraModule = typeof(setmetatable({} :: {
+	activeCameraController: GenericOptional,
+	activeMouseLockController: GenericOptional,
+	activeOcclusionModule: GenericOptional,
+	activeTransparencyController: Generic,
+	cameraSubjectChangedConn: RBXScriptConnection?,
+	cameraTypeChangedConn: RBXScriptConnection?,
+	connectionUtil: ConnectionUtil.ConnectionUtil?,
+	currentComputerCameraMovementMode: Enum.ComputerCameraMovementMode? | Enum.DevComputerCameraMovementMode?,
+	occlusionMode: Enum.DevCameraOcclusionMode?,
+}, {} :: CameraModuleClass))
+
 function CameraModule.new()
-	local self = setmetatable({},CameraModule)
+	local self: CameraModule = setmetatable({
+		activeTransparencyController = TransparencyController.new(),
+		connectionUtil = if FFlagUserPlayerConnectionMemoryLeak then ConnectionUtil.new() else nil,
+	},CameraModule)
 
 	-- Current active controller instances
 	self.activeCameraController = nil
 	self.activeOcclusionModule = nil
-	self.activeTransparencyController = nil
 	self.activeMouseLockController = nil
 
 	self.currentComputerCameraMovementMode = nil
@@ -112,10 +157,6 @@ function CameraModule.new()
 	-- Connections to events
 	self.cameraSubjectChangedConn = nil
 	self.cameraTypeChangedConn = nil
-
-	if FFlagUserPlayerConnectionMemoryLeak then
-		self.connectionUtil = ConnectionUtil.new()
-	end
 
 	-- Adds CharacterAdded and CharacterRemoving event handlers for all current players
 	for _,player in pairs(Players:GetPlayers()) do
@@ -133,11 +174,12 @@ function CameraModule.new()
 		end)
 	end
 
-	self.activeTransparencyController = TransparencyController.new()
 	self.activeTransparencyController:Enable(true)
 
 	if not UserInputService.TouchEnabled then
 		self.activeMouseLockController = MouseLockController.new()
+		assert(self.activeMouseLockController, "Strict typing check")
+
 		local toggleEvent = self.activeMouseLockController:GetBindableToggleEvent()
 		if toggleEvent then
 			toggleEvent:Connect(function()
@@ -174,7 +216,7 @@ function CameraModule.new()
 	return self
 end
 
-function CameraModule:GetCameraMovementModeFromSettings()
+function CameraModule:GetCameraMovementModeFromSettings(): Enum.ComputerCameraMovementMode | Enum.DevComputerCameraMovementMode
 	local cameraMode = Players.LocalPlayer.CameraMode
 
 	-- Lock First Person trumps all other settings and forces ClassicCamera
@@ -278,7 +320,7 @@ function CameraModule:ActivateOcclusionModule(occlusionMode: Enum.DevCameraOcclu
 	end
 end
 
-function CameraModule:ShouldUseVehicleCamera()
+function CameraModule:ShouldUseVehicleCamera(): boolean
 	local camera = workspace.CurrentCamera
 	if not camera then
 		return false
@@ -294,7 +336,7 @@ function CameraModule:ShouldUseVehicleCamera()
 	return isEligibleSubject and isEligibleType and isEligibleOcclusionMode
 end
 
-function CameraModule:ActivateCameraController(cameraMovementMode, legacyCameraType: Enum.CameraType?) -- remove args with FFlagUserRespectLegacyCameraOptions 
+function CameraModule:ActivateCameraController(cameraMovementMode: Enum.ComputerCameraMovementMode? | Enum.DevComputerCameraMovementMode?, legacyCameraType: Enum.CameraType?) -- remove args with FFlagUserRespectLegacyCameraOptions 
 	if FFlagUserRespectLegacyCameraOptions then
 		-- legacyCameraType should always be respected
 		legacyCameraType = (workspace.CurrentCamera :: Camera).CameraType
@@ -383,6 +425,8 @@ function CameraModule:ActivateCameraController(cameraMovementMode, legacyCameraT
 	elseif newCameraController ~= nil then
 		-- only activate the new controller
 		self.activeCameraController = newCameraController
+		assert(self.activeCameraController, "Strict typing check")
+
 		self.activeCameraController:Enable(true)
 	end
 
@@ -408,7 +452,7 @@ end
 -- Note: The active transparency controller could be made to listen for this event itself.
 function CameraModule:OnCameraSubjectChanged()
 	local camera = workspace.CurrentCamera
-	local cameraSubject = camera and camera.CameraSubject
+	local cameraSubject = if camera then camera.CameraSubject else nil
 
 	if self.activeTransparencyController then
 		self.activeTransparencyController:SetSubject(cameraSubject)
@@ -418,7 +462,7 @@ function CameraModule:OnCameraSubjectChanged()
 		self.activeOcclusionModule:OnCameraSubjectChanged(cameraSubject)
 	end
 
-	self:ActivateCameraController(nil, camera.CameraType)
+	self:ActivateCameraController(nil, if camera then camera.CameraType else nil)
 end
 
 function CameraModule:OnCameraTypeChanged(newCameraType: Enum.CameraType)
@@ -446,14 +490,14 @@ function CameraModule:OnCurrentCameraChanged()
 	end
 
 	self.cameraSubjectChangedConn = currentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-		self:OnCameraSubjectChanged(currentCamera.CameraSubject)
+		self:OnCameraSubjectChanged()
 	end)
 
 	self.cameraTypeChangedConn = currentCamera:GetPropertyChangedSignal("CameraType"):Connect(function()
 		self:OnCameraTypeChanged(currentCamera.CameraType)
 	end)
 
-	self:OnCameraSubjectChanged(currentCamera.CameraSubject)
+	self:OnCameraSubjectChanged()
 	self:OnCameraTypeChanged(currentCamera.CameraType)
 end
 
@@ -542,32 +586,27 @@ end
 
 -- Formerly getCurrentCameraMode, this function resolves developer and user camera control settings to
 -- decide which camera control module should be instantiated. The old method of converting redundant enum types
-if not FFlagUserRespectLegacyCameraOptions then
-	function CameraModule:GetCameraControlChoice()
-		local player = Players.LocalPlayer
-
-		if player then
-			if UserInputService:GetLastInputType() == Enum.UserInputType.Touch or UserInputService.TouchEnabled then
-				-- Touch
-				if player.DevTouchCameraMode == Enum.DevTouchCameraMovementMode.UserChoice then
-					return CameraUtils.ConvertCameraModeEnumToStandard( UserGameSettings.TouchCameraMovementMode )
-				else
-					return CameraUtils.ConvertCameraModeEnumToStandard( player.DevTouchCameraMode )
-				end
-			else
-				-- Computer
-				if player.DevComputerCameraMode == Enum.DevComputerCameraMovementMode.UserChoice then
-					local computerMovementMode = CameraUtils.ConvertCameraModeEnumToStandard(UserGameSettings.ComputerCameraMovementMode)
-					return CameraUtils.ConvertCameraModeEnumToStandard(computerMovementMode)
-				else
-					return CameraUtils.ConvertCameraModeEnumToStandard(player.DevComputerCameraMode)
-				end
-			end
+function CameraModule:GetCameraControlChoice()
+	assert(not FFlagUserRespectLegacyCameraOptions, "CameraModule:GetCameraControlChoice should not be called when FFlagUserRespectLegacyCameraOptions is enabled")
+	if UserInputService:GetLastInputType() == Enum.UserInputType.Touch or UserInputService.TouchEnabled then
+		-- Touch
+		if Players.LocalPlayer.DevTouchCameraMode == Enum.DevTouchCameraMovementMode.UserChoice then
+			return CameraUtils.ConvertCameraModeEnumToStandard(UserGameSettings.TouchCameraMovementMode )
+		else
+			return CameraUtils.ConvertCameraModeEnumToStandard(Players.LocalPlayer.DevTouchCameraMode )
+		end
+	else
+		-- Computer
+		if Players.LocalPlayer.DevComputerCameraMode == Enum.DevComputerCameraMovementMode.UserChoice then
+			local computerMovementMode = CameraUtils.ConvertCameraModeEnumToStandard(UserGameSettings.ComputerCameraMovementMode)
+			return CameraUtils.ConvertCameraModeEnumToStandard(computerMovementMode)
+		else
+			return CameraUtils.ConvertCameraModeEnumToStandard(Players.LocalPlayer.DevComputerCameraMode)
 		end
 	end
 end
 
-function CameraModule:OnCharacterAdded(char, player)
+function CameraModule:OnCharacterAdded(char: Model, player: Player)
 	if self.activeOcclusionModule then
 		self.activeOcclusionModule:CharacterAdded(char, player)
 	end
@@ -579,14 +618,17 @@ function CameraModule:OnCharacterRemoving(char, player)
 	end
 end
 
-function CameraModule:OnPlayerAdded(player)
+function CameraModule:OnPlayerAdded(player: Player)
 	if FFlagUserPlayerConnectionMemoryLeak then
-		self.connectionUtil:trackConnection(`{player.UserId}CharacterAdded`, player.CharacterAdded:Connect(function(char)
-			self:OnCharacterAdded(char, player)
-		end))
-		self.connectionUtil:trackConnection(`{player.UserId}CharacterRemoving`, player.CharacterRemoving:Connect(function(char)
-			self:OnCharacterRemoving(char, player)
-		end))
+		-- Return connectionUtil to non optional if FFlagUserPlayerConnectionMemoryLeak is removed
+		if self.connectionUtil then
+			self.connectionUtil:trackConnection(`{player.UserId}CharacterAdded`, player.CharacterAdded:Connect(function(char)
+				self:OnCharacterAdded(char, player)
+			end))
+			self.connectionUtil:trackConnection(`{player.UserId}CharacterRemoving`, player.CharacterRemoving:Connect(function(char)
+				self:OnCharacterRemoving(char, player)
+			end))
+		end
 	else
 		player.CharacterAdded:Connect(function(char)
 			self:OnCharacterAdded(char, player)
@@ -597,9 +639,12 @@ function CameraModule:OnPlayerAdded(player)
 	end
 end
 
-function CameraModule:OnPlayerRemoving(player)
-	self.connectionUtil:disconnect(`{player.UserId}CharacterAdded`)
-	self.connectionUtil:disconnect(`{player.UserId}CharacterRemoving`)
+function CameraModule:OnPlayerRemoving(player: Player)
+	-- Return connectionUtil to non optional if FFlagUserPlayerConnectionMemoryLeak is removed
+	if self.connectionUtil then
+		self.connectionUtil:disconnect(`{player.UserId}CharacterAdded`)
+		self.connectionUtil:disconnect(`{player.UserId}CharacterRemoving`)
+	end
 end
 
 function CameraModule:OnMouseLockToggled()
@@ -613,6 +658,6 @@ function CameraModule:OnMouseLockToggled()
 	end
 end
 
-local cameraModuleObject = CameraModule.new()
+CameraModule.new()
 
 return {}
