@@ -114,6 +114,7 @@ end
 
 local FFlagUserRespectLegacyCameraOptions = FlagUtil.getUserFlag("UserRespectLegacyCameraOptions")
 local FFlagUserPlayerConnectionMemoryLeak = FlagUtil.getUserFlag("UserPlayerConnectionMemoryLeak")
+local FFlagUserPreferredInputPlayerScripts = FlagUtil.getUserFlag("UserPreferredInputPlayerScripts")
 
 -- Change this later as types are added for more classes
 type Generic = any
@@ -127,6 +128,7 @@ type CameraModuleClass = {
 	ActivateOcclusionModule: (self: CameraModule, occlusionMode: Enum.DevCameraOcclusionMode) -> (),
 	GetCameraControlChoice: (self: CameraModule) -> Enum.ComputerCameraMovementMode | Enum.DevComputerCameraMovementMode,
 	GetCameraMovementModeFromSettings: (self: CameraModule) -> Enum.ComputerCameraMovementMode | Enum.DevComputerCameraMovementMode,
+	OnPreferredInputChanged: (self: CameraModule) -> (),
 	OnCameraSubjectChanged: (self: CameraModule) -> (),
 	OnCameraTypeChanged: (self: CameraModule, newCameraType: Enum.CameraType) -> (),
 	OnCharacterAdded: (self: CameraModule, character: Model, player: Player) -> (),
@@ -188,7 +190,7 @@ function CameraModule.new()
 
 	self.activeTransparencyController:Enable(true)
 
-	if not UserInputService.TouchEnabled then
+	if not UserInputService.TouchEnabled or FFlagUserPreferredInputPlayerScripts then
 		self.activeMouseLockController = MouseLockController.new()
 		assert(self.activeMouseLockController, "Strict typing check")
 
@@ -224,6 +226,11 @@ function CameraModule.new()
 	game.Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
 		self:OnCurrentCameraChanged()
 	end)
+	if FFlagUserPreferredInputPlayerScripts then
+		UserInputService:GetPropertyChangedSignal("PreferredInput"):Connect(function()
+			self:OnPreferredInputChanged()
+		end)
+	end
 
 	return self
 end
@@ -236,8 +243,13 @@ function CameraModule:GetCameraMovementModeFromSettings(): Enum.ComputerCameraMo
 		return CameraUtils.ConvertCameraModeEnumToStandard(Enum.ComputerCameraMovementMode.Classic)
 	end
 
-	local devMode, userMode
-	if UserInputService.TouchEnabled then
+	local devMode, userMode, touchMode
+	if FFlagUserPreferredInputPlayerScripts then
+		touchMode = (UserInputService.PreferredInput == Enum.PreferredInput.Touch)
+	else
+		touchMode = UserInputService.TouchEnabled
+	end
+	if touchMode then
 		devMode = CameraUtils.ConvertCameraModeEnumToStandard(Players.LocalPlayer.DevTouchCameraMode)
 		userMode = CameraUtils.ConvertCameraModeEnumToStandard(UserGameSettings.TouchCameraMovementMode)
 	else
@@ -562,6 +574,11 @@ function CameraModule:OnUserGameSettingsPropertyChanged(propertyName: string)
 		local cameraMovementMode = self:GetCameraMovementModeFromSettings()
 		self:ActivateCameraController(CameraUtils.ConvertCameraModeEnumToStandard(cameraMovementMode))
 	end
+end
+
+function CameraModule:OnPreferredInputChanged()
+	local cameraMovementMode = self:GetCameraMovementModeFromSettings()
+	self:ActivateCameraController(CameraUtils.ConvertCameraModeEnumToStandard(cameraMovementMode))
 end
 
 --[[
