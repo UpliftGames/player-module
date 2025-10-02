@@ -115,6 +115,7 @@ end
 local FFlagUserRespectLegacyCameraOptions = FlagUtil.getUserFlag("UserRespectLegacyCameraOptions")
 local FFlagUserPlayerConnectionMemoryLeak = FlagUtil.getUserFlag("UserPlayerConnectionMemoryLeak")
 local FFlagUserPreferredInputPlayerScripts = FlagUtil.getUserFlag("UserPreferredInputPlayerScripts2")
+local FFlagUserPSFixCameraControllerReset = FlagUtil.getUserFlag("UserPSFixCameraControllerReset")
 
 -- Change this later as types are added for more classes
 type Generic = any
@@ -432,8 +433,14 @@ function CameraModule:ActivateCameraController(cameraMovementMode: Enum.Computer
 		instantiatedCameraControllers[newCameraCreator] = newCameraController
 	else
 		newCameraController = instantiatedCameraControllers[newCameraCreator]
-		if newCameraController.Reset then
-			newCameraController:Reset()
+		if FFlagUserPSFixCameraControllerReset then 
+			if newCameraController.Reset and self.activeCameraController ~= newCameraController then
+				newCameraController:Reset()
+			end
+		else
+			if newCameraController.Reset then
+				newCameraController:Reset()
+			end
 		end
 	end
 
