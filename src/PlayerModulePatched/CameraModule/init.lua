@@ -114,7 +114,6 @@ end
 
 local FFlagUserPlayerConnectionMemoryLeak = FlagUtil.getUserFlag("UserPlayerConnectionMemoryLeak")
 local FFlagUserPSFixCameraControllerReset = FlagUtil.getUserFlag("UserPSFixCameraControllerReset")
-local FFlagUserCheckTouchControlMode = FlagUtil.getUserFlag("UserCheckTouchControlMode")
 
 -- Change this later as types are added for more classes
 type Generic = any
@@ -546,7 +545,7 @@ function CameraModule:OnLocalPlayerCameraPropertyChanged(propertyName: string)
 end
 
 function CameraModule:OnUserGameSettingsPropertyChanged(propertyName: string)
-	if propertyName == "ComputerCameraMovementMode" or (FFlagUserCheckTouchControlMode and propertyName == "TouchCameraMovementMode") then
+	if propertyName == "ComputerCameraMovementMode" or propertyName == "TouchCameraMovementMode" then
 		self:ActivateCameraController()
 	end
 end
