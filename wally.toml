@@ -1,6 +1,6 @@
 [package]
 name = "upliftgames/playermodule"
-version = "719.0.7191339"
+version = "721.0.7211107"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 
