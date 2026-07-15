@@ -427,6 +427,9 @@ function CameraModule:ActivateCameraController()
 	if self.activeCameraController then
 		-- deactivate the old controller and activate the new one
 		if self.activeCameraController ~= newCameraController then
+			if newCameraController.HandleSubjectDistance then
+				newCameraController:HandleSubjectDistance(self.activeCameraController)
+			end
 			self.activeCameraController:Enable(false)
 			self.activeCameraController = newCameraController
 			self.activeCameraController:Enable(true)
@@ -566,7 +569,7 @@ function CameraModule:Update(dt)
 
 		local newCameraCFrame, newCameraFocus = self.activeCameraController:Update(dt)
 
-		if self.activeOcclusionModule then
+		if self.activeOcclusionModule and not self.activeCameraController.skipOcclusion then
 			newCameraCFrame, newCameraFocus = self.activeOcclusionModule:Update(dt, newCameraCFrame, newCameraFocus)
 		end
 
