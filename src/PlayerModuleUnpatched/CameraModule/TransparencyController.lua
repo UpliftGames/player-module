@@ -22,6 +22,15 @@ local HIDE_IN_FIRST_PERSON_CLASSES = {
 
 local Util = require(script.Parent:WaitForChild("CameraUtils"))
 
+local FFlagUserHideCharacterParticlesInFirstPerson
+do
+	local success, result = pcall(function()
+		return UserSettings():IsUserFeatureEnabled("UserHideCharacterParticlesInFirstPerson")
+	end)
+	FFlagUserHideCharacterParticlesInFirstPerson = success and result
+end
+
+
 --[[ The Module ]]--
 local TransparencyController = {}
 TransparencyController.__index = TransparencyController
@@ -49,8 +58,14 @@ function TransparencyController:HasToolAncestor(object: Instance)
 end
 
 function TransparencyController:IsValidPartToModify(part: BasePart)
-	for _, className in HIDE_IN_FIRST_PERSON_CLASSES do
-		if part:IsA(className) then
+	if FFlagUserHideCharacterParticlesInFirstPerson then
+		for _, className in HIDE_IN_FIRST_PERSON_CLASSES do
+			if part:IsA(className) then
+				return not self:HasToolAncestor(part)
+			end
+		end
+	else
+		if part:IsA('BasePart') or part:IsA('Decal') then
 			return not self:HasToolAncestor(part)
 		end
 	end
